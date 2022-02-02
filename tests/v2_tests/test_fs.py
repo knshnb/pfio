@@ -183,3 +183,64 @@ def test_recreate():
 
             p.join(timeout=1)
             assert p.exitcode == 0
+
+
+def test_recreate2():
+    '''
+    content = b'deadbeef'
+    with gen_fs("s3") as fs:
+        with fs.open('file', 'wb') as fp:
+            fp.write(content)
+
+    dirname = "s3://test-dummy-bucket/"
+    barrier = mp.Barrier(1)
+
+    with lazify(lambda: from_url(dirname)) as s3:
+        with s3.open('file', 'rb') as fp:
+            assert content == fp.read()
+
+        # Unpicklable something
+        somefile = open('/tmp/deadbeef', 'wb')
+        # somefile.write(b"><><><")
+        import io
+        somefile = io.BufferedWriter(somefile)
+        import pickle
+        pickle.dumps(somefile)
+            
+        def func():
+            somefile.write(content)
+            somefile.close()
+            # accessing the shared container
+            # assert content == fp.read()
+                
+        p = mp.Process(target=func)
+        p.start()
+
+        p.join(timeout=1)
+        assert p.exitcode == 0
+
+        with open('/tmp/deadbeef', 'rb') as fp:
+            assert content == fp.read()
+    '''
+    class Unpicklable:
+        def __getstate__(self):
+            raise RuntimeError("you shouldn't do that")
+
+        def get(self):
+            return 10
+
+    up = Unpicklable()
+    import pickle
+    # pickle.dumps(up)
+    
+    def f():
+        print(up)
+        return up.get()
+
+    p = mp.Process(target=f)
+    p.start()
+
+    p.join(timeout=1)
+    
+    assert p.exitcode == 0
+    
