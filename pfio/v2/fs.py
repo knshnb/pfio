@@ -396,10 +396,23 @@ class _LazyFS:
             self.mixin = None
         self.func = func
 
+        #print('register')
+        os.register_at_fork(before=lambda: print('forked!'))
+        os.register_at_fork(before=self._cleanup)
+
+    def _cleanup(self):
+        self.mixin = None
+
+    def __getstate__(self):
+        return dict(mixin=self.mixin, func=self.func)
+        
     def __getattr__(self, attr):
-        if self.mixin is None or self.mixin.is_forked:
-            self.mixin = self.func()
-        return getattr(self.mixin, attr)
+        mixin = getattr(self, 'mixin')
+        if mixin is None or mixin.is_forked:
+            setattr(self, 'mixin', self.func())
+
+        mixin = getattr(self, 'mixin')
+        return getattr(mixin, attr)
 
     def __enter__(self) -> 'FS':
         return self

@@ -310,6 +310,7 @@ class S3(FS):
                  **_):
         super().__init__()
         self.bucket = bucket
+        self.create_bucket = create_bucket
         if prefix is not None:
             self.cwd = prefix
         else:
@@ -352,18 +353,39 @@ class S3(FS):
         if self.endpoint is not None:
             kwargs['endpoint_url'] = self.endpoint
 
+        self.kwargs = kwargs
+        self._connect()
+
+    def _connect(self):
         # print('boto3.client options:', kwargs)
-        self.client = boto3.client('s3', **kwargs)
+        self.client = boto3.client('s3', **self.kwargs)
 
         try:
-            self.client.head_bucket(Bucket=bucket)
+            self.client.head_bucket(Bucket=self.bucket)
         except ClientError as e:
-            if e.response['Error']['Code'] == '404' and create_bucket:
-                res = self.client.create_bucket(Bucket=bucket)
-                print("Bucket", bucket, "created:", res)
+            if e.response['Error']['Code'] == '404' and self.create_bucket:
+                res = self.client.create_bucket(Bucket=self.bucket)
+                print("Bucket", self.bucket, "created:", res)
             else:
                 raise e
 
+    def __getstate__(self):
+        print('getstate', self.pid)
+        state = self.__dict__
+        state.pop('client')
+        return state
+
+    def __setstate__(self, state):
+        print('setpid', os.getpid())
+        # state['pid'] = os.getpid()
+        # return state
+        self.__dict__ = state
+        self.client = None
+
+        if self.is_forked:
+            self._connect()
+            self.pid = os.getpid()
+        
     def open(self, path, mode='r', **kwargs):
         '''Opens an object accessor for read or write
 

@@ -185,8 +185,32 @@ def test_recreate():
             assert p.exitcode == 0
 
 
+
+class DummyLoader:
+    def __init__(self, dirname):
+        self.s3 = lazify(lambda: from_url(dirname))
+
+    def open(self, path):
+        return self.s3.open(path, 'rb')
+
+    def __call__(self):
+        with self.s3.open('file', 'rb') as fp:
+            assert content == fp.read()
+        
+
+@mock_s3            
+def _read_file(s3, content):
+    with s3.open('file', 'rb') as fp:
+        print('>', content)
+        d = fp.read()
+        print('>', d)
+        assert 'aaa' == d
+
+
+@mock_s3
 def test_recreate2():
-    '''
+    mp.set_start_method('forkserver', force=True)
+
     content = b'deadbeef'
     with gen_fs("s3") as fs:
         with fs.open('file', 'wb') as fp:
@@ -194,33 +218,23 @@ def test_recreate2():
 
     dirname = "s3://test-dummy-bucket/"
     barrier = mp.Barrier(1)
-
-    with lazify(lambda: from_url(dirname)) as s3:
-        with s3.open('file', 'rb') as fp:
-            assert content == fp.read()
+    with from_url(dirname) as s3:
 
         # Unpicklable something
-        somefile = open('/tmp/deadbeef', 'wb')
+        #somefile = open('/tmp/deadbeef', 'wb')
         # somefile.write(b"><><><")
-        import io
-        somefile = io.BufferedWriter(somefile)
-        import pickle
-        pickle.dumps(somefile)
-            
-        def func():
-            somefile.write(content)
-            somefile.close()
-            # accessing the shared container
-            # assert content == fp.read()
-                
-        p = mp.Process(target=func)
+        #import io
+        #somefile = io.BufferedWriter(somefile)
+        print('....')
+        p = mp.Process(target=_read_file, args=[s3, content])
         p.start()
 
-        p.join(timeout=1)
+        p.join(timeout=10)
+        print('....')
         assert p.exitcode == 0
 
-        with open('/tmp/deadbeef', 'rb') as fp:
-            assert content == fp.read()
+    #with open('/tmp/deadbeef', 'rb') as fp:
+    #    assert content == fp.read()
     '''
     class Unpicklable:
         def __getstate__(self):
@@ -241,6 +255,6 @@ def test_recreate2():
     p.start()
 
     p.join(timeout=1)
-    
     assert p.exitcode == 0
+    '''
     
